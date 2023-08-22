@@ -191,7 +191,12 @@ location DRBD_<resource_name>_<node_name> ms_drbd_<resource_name> -inf: <node_na
     def configure_drbd(self, res_name, node_name):
         for i in len(res_name):
             self.cmds = self.cmds.replace("<resource_name>", res_name[i])
-            self.cmds = self.cmds.replace("<DRBD_total_number>", len(res_name))
+            res_number = utils.exec_cmd(f"linstor r lv -r {res_name[i]}")
+            res_lines = res_number.decode('utf-8').splitlines()
+            self.cmds = self.cmds.replace("<DRBD_total_number>", len(res_lines))
+            all_node = utils.exec_cmd("linstor n l")
+            all_nodes = re.findall(r'┊ (\w+) +┊',all_node)
+            res_nodes = re.findall(r'┊ (\w+) +┊',res_number)
             self.cmds = self.cmds.replace("<node_name>", node_name)
             utils.exec_cmd(f"echo -e '{self.cmds}' > crm_drbd_config{i}")
             cmd = f"crm config load update crm_drbd_config{i}"
