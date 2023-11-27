@@ -7,36 +7,25 @@ import sys
 class PacemakerConsole(object):
     def __init__(self):
         self.pacemaker = pacemaker_cmds.Pacemaker()
-        self.config = utils.ConfFile.read_yaml()
+        self.config = utils.ConfFile().read_yaml()
 
-    def modify_cluster_name(self, name=None):
-        if not name:
-            name = utils.ConfFile().get_cluster_name()
+    def modify_cluster_name(self):
+        name = self.config["cluster"]
         self.pacemaker.modify_cluster_name(name)
 
     def pacemaker_conf_change(self):
-        if self.config['quorum_status'] == "ignore":
-            self.pacemaker.modify_policy("ignore")
-        else:
-            self.pacemaker.modify_policy()
+        self.pacemaker.modify_policy()
         self.pacemaker.modify_stickiness()
         self.pacemaker.modify_stonith_enabled()
-
-    def check_pacemaker(self):
-        if self.pacemaker.check_crm_conf():
-            return [True]
-        else:
-            return [False]
 
 
 class HAConsole(object):
     def __init__(self):
         self.ha = pacemaker_cmds.HAController()
-        self.config = utils.ConfFile.read_yaml()
+        self.config = utils.ConfFile().read_yaml()
 
-    def build_ha_controller(self, sp):
-        """HA controller配置"""
-        backup_path = self.config['backup_path']
+    def build_ha_controller(self):
+        backup_path = self.config['linstor_dir']
         if not self.ha.linstor_is_conn():
             print('LINSTOR connection refused')
             sys.exit()
