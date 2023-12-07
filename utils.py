@@ -58,7 +58,6 @@ def exec_cmd(cmd):
     return result
 
 
-
 class ConfFile(object):
     def __init__(self):
         self.yaml_file = 'ha_config.yaml'
@@ -90,8 +89,8 @@ class Log(object):
 
     @staticmethod
     def set_handler(logger):
-        now_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        file_name = str(now_time) + '.log'
+        now_time = datetime.datetime.now().strftime('%Y-%m-%d')
+        file_name = 'vsdshaconf_' + str(now_time) + '.log'
         fh = logging.FileHandler(file_name, mode='a')
         fh.setLevel(logging.DEBUG)
         formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")

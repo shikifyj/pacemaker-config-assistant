@@ -35,6 +35,9 @@ class HAConsole(object):
     def __init__(self):
         self.ha = pacemaker_cmds.HAController()
         self.config = utils.ConfFile().read_yaml()
+        self.build_ha_controller()
+        self.create_controller_ha()
+        self.check_ha_controller()
 
     def build_ha_controller(self):
         print("开始配置LINSTOR Controller HA")
