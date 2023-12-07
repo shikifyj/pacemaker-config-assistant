@@ -33,32 +33,30 @@ def check_ip(ip):
         return False
 
 
-def exec_local_cmd(cmd):
-    """
-    命令执行
-    """
-    sub_conn = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    if sub_conn.returcode == 0:
-        result = sub_conn.stdout
-        return {"st": True, "rt": result}
-    else:
-        print(f"Can't to execute command: {cmd}")
-        err = sub_conn.stderr
-        print(f"Error message:{err}")
-        return {"st": False, "rt": err}
+# def exec_local_cmd(cmd):
+#     """
+#     命令执行
+#     """
+#     sub_conn = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+#     if sub_conn.returcode == 0:
+#         result = sub_conn.stdout
+#         return {"st": True, "rt": result}
+#     else:
+#         print(f"Can't to execute command: {cmd}")
+#         err = sub_conn.stderr
+#         print(f"Error message:{err}")
+#         return {"st": False, "rt": err}
 
 
 def exec_cmd(cmd):
-    result = exec_local_cmd(cmd)
+    result = subprocess.getoutput(cmd)
     result = result.decode() if isinstance(result, bytes) else result
     log_data = f'{get_host_ip()} - {cmd} - {result}'
     Log().logger.info(log_data)
-    if result['st']:
-        pass
-        # f_result = result['rt'].rstrip('\n')
-    if result['st'] is False:
-        sys.exit()
-    return result['rt']
+    if result:
+        result = result.rstrip('\n')
+    return result
+
 
 
 class ConfFile(object):

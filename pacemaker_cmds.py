@@ -44,13 +44,32 @@ class Pacemaker(object):
         cmd = "crm config property cluster-infrastructure=corosync"
         utils.exec_cmd(cmd)
 
+    @staticmethod
+    def check_crm_conf():
+        cmd = 'crm config show | cat'
+        data = utils.exec_cmd(cmd)
+        data_property = re.search('property cib-bootstrap-options:\s([\s\S]*)', data).group(1)
+        re_stonith_enabled = re.findall('stonith-enabled=(\S*)', data_property)
+        re_policy = re.findall('no-quorum-policy=(\S*)', data_property)
+        re_resource_stickiness = re.findall('resource-stickiness=(\d*)', data)
+        if not re_stonith_enabled or re_stonith_enabled[0] != 'false':
+            return False
+
+        if not re_policy or re_policy[0] not in ['ignore', 'stop']:
+            return False
+
+        if not re_resource_stickiness or re_resource_stickiness[0] != '1000':
+            return False
+
+        return True
+
 
 class HAController(object):
-    @staticmethod
-    def linstor_is_conn():
-        cmd_result = utils.exec_cmd('linstor n l')
-        if not 'Connection refused' in cmd_result:
-            return True
+    # @staticmethod
+    # def linstor_is_conn():
+    #     cmd_result = utils.exec_cmd('linstor n l')
+    #     if not 'Connection refused' in cmd_result:
+    #         return True
 
     @staticmethod
     def is_active_controller():
@@ -161,13 +180,43 @@ class Target(object):
     @staticmethod
     def create_target(group_number, ip_list, node_diskless, node_name_list):
         if len(ip_list) == 1:
-            cmds = [f"crm conf primitive vip_prtblk_on<group_number> portblock \
-                                params ip=<ip> portno=3260 protocol=tcp action=block \
+            cmds = [f"crm conf primitive vip_prtblk_on{group_number} portblock \
+                                params ip={ip_list[0]} portno=3260 protocol=tcp action=block \
                                 op start timeout=20 interval=0 \
                                 op stop timeout=20 interval=0 \
                                 op monitor timeout=20 interval=20",
-                    f"crm conf primitive vip < group_number > IPaddr2 \
-                                params ip = < ip > cidr_netmask = 24 \
+
+                    f"crm conf primitive vip {group_number} IPaddr2 \
+                                params ip = {ip_list[1]} cidr_netmask = 24 \
                                 op monitor interval = 10 timeout = 20",
 
+                    f'crm conf primitive target{group_number} iSCSITarget \
+                               params iqn="iqn.2023-07.com.example:target{group_number}" implementation=lio-t '
+                    f'portals={ip_list[0]}:3260 \
+                               op start timeout=50 interval=0 \
+                               op stop timeout=40 interval=0 \
+                               op monitor interval=15 timeout=40',
+
+                    f"crm conf group gvip{group_number} vip_prtblk_on{group_number} vip{group_number} target{group_number} \
+                               meta target-role=Started",
+
+                    f"crm conf primitive vip_prtblk_off{group_number} portblock \
+                               params ip={ip_list[0]} portno=3260 protocol=tcp action=unblock \
+                               op start timeout=20 interval=0 \
+                               op stop timeout=20 interval=0 \
+                               op monitor timeout=20 interval=20 \
+                               meta target-role=Stopped",
+
+                    f"crm conf location lo_gvip<group_number>_<node_diskless> gvip<group_number> -100: <node_diskless>",
+
+                    f"crm conf colocation co_prtblkoff<group_number> inf: vip_prtblk_off<group_number> gvip<group_number>"
                     ]
+            for cmd in cmds:
+                result = utils.exec_cmd(cmd)
+                if result is not None and 'error' in result.lower():
+                    raise Exception(f'Error executing command: {cmd}')
+            for i in range(len(node_name_list)):
+                cmd = f"crm conf location lo_gvip{group_number}_{node_name_list[i]} gvip{group_number} -inf: {node_name_list[i]}"
+                result = utils.exec_cmd(cmd)
+                if result is not None and 'error' in result.lower():
+                    raise Exception(f'Error executing command: {cmd}')

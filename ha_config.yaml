@@ -4,20 +4,20 @@ cluster: <cluster name>
 #linstor-controller高可用
 linstor_dir: <path>
 DRBD_total_number:
-vip:
+ip:
 
 #iSCSI高可用
 iscsi:
-  resource_name:
-  DRBD_total_number:
-  group_number:
-  ip:
-    -
-  node_diskless:
-  node_away:
-    -
-  DRBD_device:
-  initiatorN:
-  lun_number:
-  emulate_tpu:
+  - resource_name:
+    DRBD_total_number:
+    group_number:
+    ip:
+     -
+    node_diskless:
+    node_away:
+     -
+    DRBD_device:
+    initiatorN:
+    lun_number:
+    emulate_tpu:
 

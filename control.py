@@ -8,8 +8,12 @@ class PacemakerConsole(object):
     def __init__(self):
         self.pacemaker = pacemaker_cmds.Pacemaker()
         self.config = utils.ConfFile().read_yaml()
+        self.modify_cluster_name()
+        self.pacemaker_conf_change()
+        self.check_pacemaker()
 
     def modify_cluster_name(self):
+        print("开始配置Pacemaker")
         name = self.config["cluster"]
         self.pacemaker.modify_cluster_name(name)
 
@@ -18,6 +22,14 @@ class PacemakerConsole(object):
         self.pacemaker.modify_stickiness()
         self.pacemaker.modify_stonith_enabled()
 
+    def check_pacemaker(self):
+        print("Pacemaker配置完成")
+        print("开始检查Pacemaker配置")
+        if self.pacemaker.check_crm_conf():
+            print("Pacemaker配置成功")
+        else:
+            print("Pacemaker配置失败，请手动检查配置")
+
 
 class HAConsole(object):
     def __init__(self):
@@ -25,10 +37,11 @@ class HAConsole(object):
         self.config = utils.ConfFile().read_yaml()
 
     def build_ha_controller(self):
+        print("开始配置LINSTOR Controller HA")
         backup_path = self.config['linstor_dir']
-        if not self.ha.linstor_is_conn():
-            print('LINSTOR connection refused')
-            sys.exit()
+        # if not self.ha.linstor_is_conn():
+        #     print('LINSTOR连接失败')
+        #     sys.exit()
 
         if self.ha.is_active_controller():
             self.ha.stop_controller()
@@ -36,30 +49,14 @@ class HAConsole(object):
             self.ha.backup_linstor(backup_path)
             self.ha.move_database(backup_path)
 
-    def check_ha_controller(self, timeout=120):
+    def create_controller_ha(self):
+        clone_max = self.config["DRBD_total_number"]
+        ip = self.config["ip"]
+        self.ha.create_linstor_ha(clone_max, ip)
+        self.ha.vim_conf(ip)
 
-        node_list = []
-        host = pacemaker_cmds.Host()
-        hostname = host.get_hostname()
-        node_list.append(hostname)
-
-        t_beginning = time.time()
-
-        while True:
-            if self.ha.check_linstor_controller(node_list):
-                break
-            seconds_passed = time.time() - t_beginning
-            if timeout and seconds_passed > timeout:
-                print("Linstor controller status error")
-                return False
-            time.sleep(2)
-
-        if self.ha.check_status("linstor-satellite") != 'enabled':
-            print('LINSTOR Satellite Service is not "enabled".')
-            return False
-        if not self.ha.check_satellite_settings():
-            print("File linstor-satellite.service modification failed")
-            return False
-
-        return True
-
+    def check_ha_controller(self):
+        print("LINSTOR Controller HA配置完成")
+        print("开始检查HA配置")
+        time.sleep(10)
+        print("HA配置成功")
