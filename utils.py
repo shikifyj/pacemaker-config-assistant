@@ -58,7 +58,6 @@ def exec_cmd(cmd):
     return result
 
 
-
 class ConfFile(object):
     def __init__(self):
         self.yaml_file = 'ha_config.yaml'

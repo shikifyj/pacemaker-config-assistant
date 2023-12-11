@@ -149,8 +149,8 @@ class HAController(object):
 
         for cmd in cmds:
             result = utils.exec_cmd(cmd)
-            if result is not None and 'error' in result.lower():
-                raise Exception(f'Error executing command: {cmd}')
+            if result is not None:
+                return result
 
     @staticmethod
     def vim_conf(ip):
@@ -187,7 +187,7 @@ class Target(object):
                                 op monitor timeout=20 interval=20",
 
                     f"crm conf primitive vip {group_number} IPaddr2 \
-                                params ip = {ip_list[1]} cidr_netmask = 24 \
+                                params ip = {ip_list[0]} cidr_netmask = 24 \
                                 op monitor interval = 10 timeout = 20",
 
                     f'crm conf primitive target{group_number} iSCSITarget \
@@ -207,16 +207,149 @@ class Target(object):
                                op monitor timeout=20 interval=20 \
                                meta target-role=Stopped",
 
-                    f"crm conf location lo_gvip<group_number>_<node_diskless> gvip<group_number> -100: <node_diskless>",
+                    f"crm conf location lo_gvip{group_number}_{node_diskless} gvip{group_number} -100: {node_diskless}",
 
-                    f"crm conf colocation co_prtblkoff<group_number> inf: vip_prtblk_off<group_number> gvip<group_number>"
+                    f"crm conf colocation co_prtblkoff{group_number} inf: vip_prtblk_off{group_number} gvip{group_number}"
                     ]
             for cmd in cmds:
                 result = utils.exec_cmd(cmd)
-                if result is not None and 'error' in result.lower():
-                    raise Exception(f'Error executing command: {cmd}')
+                if result is not None:
+                    return result
             for i in range(len(node_name_list)):
                 cmd = f"crm conf location lo_gvip{group_number}_{node_name_list[i]} gvip{group_number} -inf: {node_name_list[i]}"
                 result = utils.exec_cmd(cmd)
-                if result is not None and 'error' in result.lower():
-                    raise Exception(f'Error executing command: {cmd}')
+                if result is not None:
+                    return result
+        else:
+            cmds = [f"crm conf primitive vip_prtblk_on{group_number}_1 portblock \
+                                params ip={ip_list[0]} portno=3260 protocol=tcp action=block \
+                                op start timeout=20 interval=0 \
+                                op stop timeout=20 interval=0 \
+                                op monitor timeout=20 interval=20",
+
+                    f"crm conf primitive vip_prtblk_on{group_number}_2 portblock \
+                                            params ip={ip_list[1]} portno=3260 protocol=tcp action=block \
+                                            op start timeout=20 interval=0 \
+                                            op stop timeout=20 interval=0 \
+                                            op monitor timeout=20 interval=20",
+
+                    f"crm conf primitive vip {group_number}_1 IPaddr2 \
+                                params ip = {ip_list[0]} cidr_netmask = 24 \
+                                op monitor interval = 10 timeout = 20",
+
+                    f"crm conf primitive vip {group_number}_2 IPaddr2 \
+                        params ip = {ip_list[0]} cidr_netmask = 24 \
+                        op monitor interval = 10 timeout = 20",
+
+                    f'crm conf primitive target{group_number} iSCSITarget \
+                               params iqn="iqn.2023-07.com.example:target{group_number}" implementation=lio-t '
+                    f'portals="{ip_list[0]}:3260 {ip_list[1]}:3260" \
+                               op start timeout=50 interval=0 \
+                               op stop timeout=40 interval=0 \
+                               op monitor interval=15 timeout=40',
+
+                    f"crm conf group gvip{group_number} vip_prtblk_on{group_number}_1 vip_prtblk_on{group_number}_2 "
+                    f"vip{group_number}_1 vip{group_number}_2 target{group_number} \
+                               meta target-role=Started",
+
+                    f"crm conf primitive vip_prtblk_off{group_number}_1 portblock \
+                               params ip={ip_list[0]} portno=3260 protocol=tcp action=unblock \
+                               op start timeout=20 interval=0 \
+                               op stop timeout=20 interval=0 \
+                               op monitor timeout=20 interval=20 \
+                               meta target-role=Stopped",
+
+                    f"crm conf primitive vip_prtblk_off{group_number}_2 portblock \
+                               params ip={ip_list[0]} portno=3260 protocol=tcp action=unblock \
+                               op start timeout=20 interval=0 \
+                               op stop timeout=20 interval=0 \
+                               op monitor timeout=20 interval=20 \
+                               meta target-role=Stopped",
+
+                    f"crm conf location lo_gvip{group_number}_{node_diskless} gvip{group_number} -100: {node_diskless}",
+
+                    f"crm conf colocation co_prtblkoff{group_number}_1 inf: vip_prtblk_off{group_number}_1 gvip{group_number}",
+
+                    f"crm conf colocation co_prtblkoff{group_number}_2 inf: vip_prtblk_off{group_number}_2 gvip{group_number}"
+                    ]
+            for cmd in cmds:
+                result = utils.exec_cmd(cmd)
+                if result is not None:
+                    return result
+            for i in range(len(node_name_list)):
+                cmd = f"crm conf location lo_gvip{group_number}_{node_name_list[i]} gvip{group_number} -inf: {node_name_list[i]}"
+                result = utils.exec_cmd(cmd)
+                if result is not None:
+                    return result
+
+    @staticmethod
+    def delete_target(group_number):
+        cmd = f'crm conf delete vip_prtblk_on{group_number}_1 vip_prtblk_on{group_number}_2 vip{group_number}_1 ' \
+              f'vip{group_number}_2 target{group_number} vip_prtblk_off{group_number}_1 vip_prtblk_off{group_number}_2 ' \
+              f'--force'
+        utils.exec_cmd(cmd)
+
+
+class ISCSI(object):
+    @staticmethod
+    def create_iscsi(resource_name, ip_list, drbd_device, group_number, initiator, lun_number, emulate_tpu):
+        if len(ip_list) == 1:
+            cmds = [
+                f'crm conf primitive LUN_{resource_name} iSCSILogicalUnit \
+                           params target_iqn="iqn.2023-07.com.example:target{group_number}" implementation=lio-t lun={lun_number} path="{drbd_device}" emulate_tpu={emulate_tpu} allowed_initiators="{initiator}" \
+                           op start timeout=40 interval=0 \
+                           op stop timeout=40 interval=0 \
+                           op monitor timeout=40 interval=15 \
+                           meta target-role=Stopped',
+
+                f'crm conf colocation co_LUN_{resource_name} inf: LUN_{resource_name} ms_drbd_{resource_name}:Master',
+
+                f'colocation co_LUN_{resource_name}_gvip{group_number} inf: ms_drbd_{resource_name}:Master gvip{group_number}',
+
+                f'order or_1_LUN_{resource_name} gvip{group_number} ms_drbd_{resource_name}:promote',
+
+                f'order or_2_LUN_{resource_name} ms_drbd_{resource_name}:promote LUN_{resource_name}:start',
+
+                f'order or_3_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}'
+            ]
+            for cmd in cmds:
+                result = utils.exec_cmd(cmd)
+                if result is not None:
+                    return result
+        else:
+            cmds = [
+                f'crm conf primitive LUN_{resource_name} iSCSILogicalUnit \
+                           params target_iqn="iqn.2023-07.com.example:target{group_number}" implementation=lio-t lun={lun_number} path="{drbd_device}" emulate_tpu={emulate_tpu} allowed_initiators="{initiator}" \
+                           op start timeout=40 interval=0 \
+                           op stop timeout=40 interval=0 \
+                           op monitor timeout=40 interval=15 \
+                           meta target-role=Stopped',
+
+                f'crm conf colocation co_LUN_{resource_name} inf: LUN_{resource_name} ms_drbd_{resource_name}:Master',
+
+                f'colocation co_LUN_{resource_name}_gvip{group_number} inf: ms_drbd_{resource_name}:Master gvip{group_number}',
+
+                f'order or_1_LUN_{resource_name} gvip{group_number} ms_drbd_{resource_name}:promote',
+
+                f'order or_2_LUN_{resource_name} ms_drbd_{resource_name}:promote LUN_{resource_name}:start',
+
+                f'order or_3_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}_1',
+
+                f'order or_4_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}_2'
+            ]
+            for cmd in cmds:
+                result = utils.exec_cmd(cmd)
+                if result is not None:
+                    return result
+
+    @staticmethod
+    def delete_iscsi(resource_name):
+        cmds = [
+            f'crm res stop LUN_{resource_name}',
+
+            f'crm res stop p_drbd_{resource_name}',
+
+            f'crm conf delete LUN_{resource_name} p_drbd_{resource_name} --force'
+        ]
+        for cmd in cmds:
+            utils.exec_cmd(cmd)
