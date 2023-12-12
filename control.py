@@ -81,11 +81,11 @@ class ISCSIConsole(object):
             node_diskless = iscsi['node_diskless']
             node_name_list = iscsi['node_away']
             result = self.target.create_target(group_number, ip_list, node_diskless, node_name_list)
-            if len(result) == 0:
+            if not result or 'ERROR: (unpack_config) warning: Blind faith: not fencing unseen nodes' not in result:
                 print('Target创建成功')
             else:
                 print('Target创建失败，请手动检查配置')
-                print(f'Error: {result}')
+                print(result)
 
     def create_drbd(self):
         print('开始绑定资源')
@@ -95,11 +95,11 @@ class ISCSIConsole(object):
             node_name = iscsi['node_away']
             clone_max = iscsi['DRBD_total_number']
             result = self.drbd.configure_drbd(res_name, node_name, clone_max)
-            if len(result) == 0:
-                print('资源绑定成功')
+            if not result or 'ERROR: (unpack_config) warning: Blind faith: not fencing unseen nodes' not in result:
+                print('Target创建成功')
             else:
-                print('资源绑定失败，请手动检查配置')
-                print(f'Error: {result}')
+                print('Target创建失败，请手动检查配置')
+                print(result)
 
     def create_lun(self):
         print('开始创建LUN')
@@ -114,11 +114,11 @@ class ISCSIConsole(object):
             emulate_tpu = iscsi['emulate_tpu']
             result = self.iscsi.create_iscsi(resource_name, ip_list, drbd_device, group_number, initiator,
                                              lun_number, emulate_tpu)
-            if len(result) == 0:
-                print('LUN创建成功')
+            if not result or 'ERROR: (unpack_config) warning: Blind faith: not fencing unseen nodes' not in result:
+                print('Target创建成功')
             else:
-                print('LUN创建失败，请手动检查配置')
-                print(f'Error: {result}')
+                print('Target创建失败，请手动检查配置')
+                print(result)
 
     def delete_iscsi(self):
         print('开始删除Target')

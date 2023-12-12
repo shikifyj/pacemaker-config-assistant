@@ -162,18 +162,23 @@ class HAController(object):
 class DRBD(object):
     @staticmethod
     def configure_drbd(res_name, node_name, clone_max):
-        cmd = f"""crm conf primitive p_drbd_{res_name} ocf:linbit:drbd \
+        cmds = [f"crm conf primitive p_drbd_{res_name} ocf:linbit:drbd \
                 params drbd_resource={res_name} \
                 op monitor interval=29 role=Master \
-                op monitor interval=30 role=Slave
-        crm conf ms ms_drbd_{res_name} p_drbd_{res_name} \
-                meta master-max=1 master-node-max=1 clone-max={clone_max} clone-node-max=1 notify=true 
-                target-role=Stopped"""
-        utils.exec_cmd(cmd)
+                op monitor interval=30 role=Slave",
+                f"crm conf ms ms_drbd_{res_name} p_drbd_{res_name} \
+                meta master-max=1 master-node-max=1 clone-max={clone_max} clone-node-max=1 notify=true "
+                f"target-role=Stopped"]
+        results = []
+        for cmd in cmds:
+            result = utils.exec_cmd(cmd)
+            results.append(result)
 
         for name in node_name:
             cmd = f"crm conf location DRBD_{res_name}_{name} ms_drbd_{res_name} -inf: {name}"
-            utils.exec_cmd(cmd)
+            result = utils.exec_cmd(cmd)
+            results.append(result)
+        return results
 
 
 class Target(object):
@@ -211,15 +216,15 @@ class Target(object):
 
                     f"crm conf colocation co_prtblkoff{group_number} inf: vip_prtblk_off{group_number} gvip{group_number}"
                     ]
+            results = []
             for cmd in cmds:
                 result = utils.exec_cmd(cmd)
-                if result is not None:
-                    return result
+                results.append(result)
             for i in range(len(node_name_list)):
                 cmd = f"crm conf location lo_gvip{group_number}_{node_name_list[i]} gvip{group_number} -inf: {node_name_list[i]}"
                 result = utils.exec_cmd(cmd)
-                if result is not None:
-                    return result
+                results.append(result)
+            return results
         else:
             cmds = [f"crm conf primitive vip_prtblk_on{group_number}_1 portblock \
                                 params ip={ip_list[0]} portno=3260 protocol=tcp action=block \
@@ -272,15 +277,15 @@ class Target(object):
 
                     f"crm conf colocation co_prtblkoff{group_number}_2 inf: vip_prtblk_off{group_number}_2 gvip{group_number}"
                     ]
+            results = []
             for cmd in cmds:
                 result = utils.exec_cmd(cmd)
-                if result is not None:
-                    return result
+                results.append(result)
             for i in range(len(node_name_list)):
                 cmd = f"crm conf location lo_gvip{group_number}_{node_name_list[i]} gvip{group_number} -inf: {node_name_list[i]}"
                 result = utils.exec_cmd(cmd)
-                if result is not None:
-                    return result
+                results.append(result)
+            return results
 
     @staticmethod
     def delete_target(group_number):
@@ -312,10 +317,11 @@ class ISCSI(object):
 
                 f'order or_3_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}'
             ]
+            results = []
             for cmd in cmds:
                 result = utils.exec_cmd(cmd)
-                if result is not None:
-                    return result
+                results.append(result)
+            return results
         else:
             cmds = [
                 f'crm conf primitive LUN_{resource_name} iSCSILogicalUnit \
@@ -337,10 +343,11 @@ class ISCSI(object):
 
                 f'order or_4_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}_2'
             ]
+            results = []
             for cmd in cmds:
                 result = utils.exec_cmd(cmd)
-                if result is not None:
-                    return result
+                results.append(result)
+            return results
 
     @staticmethod
     def delete_iscsi(resource_name):
