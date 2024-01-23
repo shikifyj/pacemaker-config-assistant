@@ -12,6 +12,8 @@ def main():
     build_parser.add_argument('-d', action='store_true', help='Target绑定资源')
     build_parser.add_argument('-t', action='store_true', help='创建Target')
     build_parser.add_argument('-i', action='store_true', help='创建LUN')
+    build_parser.add_argument('-v', action='store_true', help='配置Controller IP')
+    build_parser.add_argument('-c', action='store_true', help='刷新资源')
 
     delete_parser = subparsers.add_parser('delete', help='删除配置')
     delete_parser.add_argument('-t', action='store_true', help='删除Target相关资源')
@@ -42,9 +44,15 @@ def build(args):
         iscsi_console.create_target()
     elif args.i:
         iscsi_console.create_lun()
+    elif args.c:
+        control.clean_res()
+    elif args.v:
+        control.set_ip()
     else:
         control.PacemakerConsole()
         control.HAConsole()
+        control.clean_res()
+        control.clean_res()
         iscsi_console.create_drbd()
         iscsi_console.create_target()
         iscsi_console.create_lun()
@@ -59,7 +67,7 @@ def delete(args):
 
 
 def version(args):
-    print('v1.0.0')
+    print('v1.0.1')
 
 
 if __name__ == "__main__":

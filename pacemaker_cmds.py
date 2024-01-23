@@ -20,6 +20,13 @@ class Host(object):
 
 class Pacemaker(object):
     @staticmethod
+    def count_cluster_nodes():
+        cmd = "crm node show"
+        result = utils.exec_cmd(cmd)
+        node_count = result.count("member")
+        return node_count
+
+    @staticmethod
     def modify_cluster_name(cluster_name):
         cmd = f"crm config property cluster-name={cluster_name}"
         utils.exec_cmd(cmd)
@@ -144,24 +151,30 @@ class HAController(object):
 
             "crm conf colocation c_vip_with_drbd inf: vip_ctl ms_drbd_linstordb:Master",
 
-            "crm conf order o_drbd_before_linstor inf: ms_drbd_linstordb:promote g_linstor:start"
+            "crm conf order o_drbd_before_linstor Mandatory: ms_drbd_linstordb:promote g_linstor:star"
         ]
 
+        results = []
         for cmd in cmds:
             result = utils.exec_cmd(cmd)
-            if result is not None:
-                return result
+            results.append(result)
+        return results
 
     @staticmethod
     def vim_conf(ip):
-        path = "/etc/linstor/linstor-client.conf"
-        cmd = f"sed -i '/^controllers=/ s/$/,{ip}/' {path}"
-        utils.exec_cmd(cmd)
+        cmd = "cat /etc/linstor/linstor-client.conf"
+        result = utils.exec_cmd(cmd)
+        if ip in result:
+            pass
+        else:
+            path = "/etc/linstor/linstor-client.conf"
+            cmd = f"sed -i '/^controllers=/ s/$/,{ip}/' {path}"
+            utils.exec_cmd(cmd)
 
 
 class DRBD(object):
     @staticmethod
-    def configure_drbd(res_name, node_name, clone_max):
+    def configure_drbd(res_name, node_name="", clone_max="1"):
         cmds = [f"crm conf primitive p_drbd_{res_name} ocf:linbit:drbd \
                 params drbd_resource={res_name} \
                 op monitor interval=29 role=Master \
@@ -173,17 +186,19 @@ class DRBD(object):
         for cmd in cmds:
             result = utils.exec_cmd(cmd)
             results.append(result)
-
-        for name in node_name:
-            cmd = f"crm conf location DRBD_{res_name}_{name} ms_drbd_{res_name} -inf: {name}"
-            result = utils.exec_cmd(cmd)
-            results.append(result)
+        if node_name != "":
+            for name in node_name:
+                cmd = f"crm conf location DRBD_{res_name}_{name} ms_drbd_{res_name} -inf: {name}"
+                result = utils.exec_cmd(cmd)
+                results.append(result)
+        utils.exec_cmd(f"crm res start p_drbd_{res_name}")
+        utils.exec_cmd(f"crm res cleanup p_drbd_{res_name}")
         return results
 
 
 class Target(object):
     @staticmethod
-    def create_target(group_number, ip_list, node_diskless, node_name_list):
+    def create_target(group_number, ip_list, node_diskless, node_name_list=""):
         if len(ip_list) == 1:
             cmds = [f"crm conf primitive vip_prtblk_on{group_number} portblock \
                                 params ip={ip_list[0]} portno=3260 protocol=tcp action=block \
@@ -191,9 +206,9 @@ class Target(object):
                                 op stop timeout=20 interval=0 \
                                 op monitor timeout=20 interval=20",
 
-                    f"crm conf primitive vip {group_number} IPaddr2 \
-                                params ip = {ip_list[0]} cidr_netmask = 24 \
-                                op monitor interval = 10 timeout = 20",
+                    f"crm conf primitive vip{group_number} IPaddr2 \
+                                params ip={ip_list[0]} cidr_netmask=24 \
+                                op monitor interval=10 timeout=20",
 
                     f'crm conf primitive target{group_number} iSCSITarget \
                                params iqn="iqn.2023-07.com.example:target{group_number}" implementation=lio-t '
@@ -210,7 +225,7 @@ class Target(object):
                                op start timeout=20 interval=0 \
                                op stop timeout=20 interval=0 \
                                op monitor timeout=20 interval=20 \
-                               meta target-role=Stopped",
+                               meta target-role=Started",
 
                     f"crm conf location lo_gvip{group_number}_{node_diskless} gvip{group_number} -100: {node_diskless}",
 
@@ -220,10 +235,11 @@ class Target(object):
             for cmd in cmds:
                 result = utils.exec_cmd(cmd)
                 results.append(result)
-            for i in range(len(node_name_list)):
-                cmd = f"crm conf location lo_gvip{group_number}_{node_name_list[i]} gvip{group_number} -inf: {node_name_list[i]}"
-                result = utils.exec_cmd(cmd)
-                results.append(result)
+            if node_name_list != "":
+                for i in range(len(node_name_list)):
+                    cmd = f"crm conf location lo_gvip{group_number}_{node_name_list[i]} gvip{group_number} -inf: {node_name_list[i]}"
+                    result = utils.exec_cmd(cmd)
+                    results.append(result)
             return results
         else:
             cmds = [f"crm conf primitive vip_prtblk_on{group_number}_1 portblock \
@@ -238,13 +254,13 @@ class Target(object):
                                             op stop timeout=20 interval=0 \
                                             op monitor timeout=20 interval=20",
 
-                    f"crm conf primitive vip {group_number}_1 IPaddr2 \
-                                params ip = {ip_list[0]} cidr_netmask = 24 \
-                                op monitor interval = 10 timeout = 20",
+                    f"crm conf primitive vip{group_number}_1 IPaddr2 \
+                                params ip={ip_list[0]} cidr_netmask=24 \
+                                op monitor interval=10 timeout=20",
 
-                    f"crm conf primitive vip {group_number}_2 IPaddr2 \
-                        params ip = {ip_list[0]} cidr_netmask = 24 \
-                        op monitor interval = 10 timeout = 20",
+                    f"crm conf primitive vip{group_number}_2 IPaddr2 \
+                                params ip={ip_list[1]} cidr_netmask=24 \
+                                op monitor interval=10 timeout=20",
 
                     f'crm conf primitive target{group_number} iSCSITarget \
                                params iqn="iqn.2023-07.com.example:target{group_number}" implementation=lio-t '
@@ -262,14 +278,14 @@ class Target(object):
                                op start timeout=20 interval=0 \
                                op stop timeout=20 interval=0 \
                                op monitor timeout=20 interval=20 \
-                               meta target-role=Stopped",
+                               meta target-role=Started",
 
                     f"crm conf primitive vip_prtblk_off{group_number}_2 portblock \
-                               params ip={ip_list[0]} portno=3260 protocol=tcp action=unblock \
+                               params ip={ip_list[1]} portno=3260 protocol=tcp action=unblock \
                                op start timeout=20 interval=0 \
                                op stop timeout=20 interval=0 \
                                op monitor timeout=20 interval=20 \
-                               meta target-role=Stopped",
+                               meta target-role=Started",
 
                     f"crm conf location lo_gvip{group_number}_{node_diskless} gvip{group_number} -100: {node_diskless}",
 
@@ -281,17 +297,22 @@ class Target(object):
             for cmd in cmds:
                 result = utils.exec_cmd(cmd)
                 results.append(result)
-            for i in range(len(node_name_list)):
-                cmd = f"crm conf location lo_gvip{group_number}_{node_name_list[i]} gvip{group_number} -inf: {node_name_list[i]}"
-                result = utils.exec_cmd(cmd)
-                results.append(result)
+            if node_name_list != "":
+                for i in range(len(node_name_list)):
+                    cmd = f"crm conf location lo_gvip{group_number}_{node_name_list[i]} gvip{group_number} -inf: {node_name_list[i]}"
+                    result = utils.exec_cmd(cmd)
+                    results.append(result)
             return results
 
     @staticmethod
     def delete_target(group_number):
-        cmd = f'crm conf delete vip_prtblk_on{group_number}_1 vip_prtblk_on{group_number}_2 vip{group_number}_1 ' \
-              f'vip{group_number}_2 target{group_number} vip_prtblk_off{group_number}_1 vip_prtblk_off{group_number}_2 ' \
-              f'--force'
+        result = utils.exec_cmd(f'crm conf show gvip{group_number}')
+        if '_2' in result:
+            cmd = f'crm conf delete vip_prtblk_on{group_number}_1 vip_prtblk_on{group_number}_2 vip{group_number}_1 ' \
+                  f'vip{group_number}_2 target{group_number} vip_prtblk_off{group_number}_1 vip_prtblk_off{group_number}_2 ' \
+                  f'--force'
+        else:
+            cmd = f'crm conf delete vip_prtblk_on{group_number} vip{group_number} target{group_number} vip_prtblk_off{group_number}  --force'
         utils.exec_cmd(cmd)
 
 
@@ -309,18 +330,19 @@ class ISCSI(object):
 
                 f'crm conf colocation co_LUN_{resource_name} inf: LUN_{resource_name} ms_drbd_{resource_name}:Master',
 
-                f'colocation co_LUN_{resource_name}_gvip{group_number} inf: ms_drbd_{resource_name}:Master gvip{group_number}',
+                f'crm conf colocation co_LUN_{resource_name}_gvip{group_number} inf: ms_drbd_{resource_name}:Master gvip{group_number}',
 
-                f'order or_1_LUN_{resource_name} gvip{group_number} ms_drbd_{resource_name}:promote',
+                f'crm conf order or_1_LUN_{resource_name} gvip{group_number} ms_drbd_{resource_name}:promote',
 
-                f'order or_2_LUN_{resource_name} ms_drbd_{resource_name}:promote LUN_{resource_name}:start',
+                f'crm conf order or_2_LUN_{resource_name} ms_drbd_{resource_name}:promote LUN_{resource_name}:start',
 
-                f'order or_3_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}'
+                f'crm conf order or_3_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}'
             ]
             results = []
             for cmd in cmds:
                 result = utils.exec_cmd(cmd)
                 results.append(result)
+            utils.exec_cmd(f'crm res start LUN_{resource_name}')
             return results
         else:
             cmds = [
@@ -333,20 +355,21 @@ class ISCSI(object):
 
                 f'crm conf colocation co_LUN_{resource_name} inf: LUN_{resource_name} ms_drbd_{resource_name}:Master',
 
-                f'colocation co_LUN_{resource_name}_gvip{group_number} inf: ms_drbd_{resource_name}:Master gvip{group_number}',
+                f'crm conf colocation co_LUN_{resource_name}_gvip{group_number} inf: ms_drbd_{resource_name}:Master gvip{group_number}',
 
-                f'order or_1_LUN_{resource_name} gvip{group_number} ms_drbd_{resource_name}:promote',
+                f'crm conf order or_1_LUN_{resource_name} gvip{group_number} ms_drbd_{resource_name}:promote',
 
-                f'order or_2_LUN_{resource_name} ms_drbd_{resource_name}:promote LUN_{resource_name}:start',
+                f'crm conf order or_2_LUN_{resource_name} ms_drbd_{resource_name}:promote LUN_{resource_name}:start',
 
-                f'order or_3_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}_1',
+                f'crm conf order or_3_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}_1',
 
-                f'order or_4_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}_2'
+                f'crm conf order or_4_LUN_{resource_name} LUN_{resource_name} vip_prtblk_off{group_number}_2'
             ]
             results = []
             for cmd in cmds:
                 result = utils.exec_cmd(cmd)
                 results.append(result)
+            utils.exec_cmd(f'crm res start LUN_{resource_name}')
             return results
 
     @staticmethod
