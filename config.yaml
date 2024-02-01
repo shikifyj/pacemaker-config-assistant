@@ -1,4 +1,0 @@
-cluster: <cluster name>
-vip: <vip address>
-backup_path:
-quorum_status:

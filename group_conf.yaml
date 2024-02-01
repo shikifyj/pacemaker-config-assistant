@@ -1,7 +1,0 @@
-# group_conf.yaml
-group:
-  - number: <number>
-    vip: <IP>
-    node:
-        - <node_name>   # gvip & port_block_off 配置时需要的远离节点名称
-        - <node_name>

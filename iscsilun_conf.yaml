@@ -1,8 +1,0 @@
-# iscsilun_conf.yaml
-iscsilun:
-   - name: <resource_name>
-     initiator:
-		   - <initiator1>
-		   - <initiator2>
-     lun_number: <lun_number>
-     number: <group_number>

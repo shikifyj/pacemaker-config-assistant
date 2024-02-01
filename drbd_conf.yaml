@@ -1,4 +1,0 @@
-# drbd_conf.yaml
-resource:
-  - <resource_name>
-  - <resource_name>
