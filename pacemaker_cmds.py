@@ -383,3 +383,31 @@ class ISCSI(object):
         ]
         for cmd in cmds:
             utils.exec_cmd(cmd)
+
+
+class ExtendNode(object):
+    @staticmethod
+    def set_clone_max(clone_max):
+        cmd = f'crm conf set ms_drbd_linstordb.clone-max {clone_max}'
+        utils.exec_cmd(cmd)
+
+    @staticmethod
+    def set_linstordb(node_name):
+        cmd = f'crm conf location DRBD_linstordb_{node_name} ms_drbd_linstordb -inf: {node_name}'
+        utils.exec_cmd(cmd)
+
+    @staticmethod
+    def set_target(node_name, tgn):
+        cmd = f'crm conf location lo_gvip{tgn}_{node_name} gvip{tgn} -inf: {node_name}'
+        utils.exec_cmd(cmd)
+
+    @staticmethod
+    def set_drbd(node_name, resource_name):
+        cmd = f'crm conf location DRBD_{resource_name}_{node_name} ms_drbd_{resource_name} -inf: {node_name}'
+        utils.exec_cmd(cmd)
+
+    @staticmethod
+    def get_hostname():
+        cmd = 'hostname'
+        result = utils.exec_cmd(cmd)
+        return result
