@@ -165,3 +165,66 @@ class ISCSIConsole(object):
             resource_name = iscsi['resource_name']
             self.iscsi.delete_iscsi(resource_name)
             print('LUN删除成功')
+
+
+class Extend(object):
+    def __init__(self):
+        self.pacemaker = pacemaker_cmds.Pacemaker()
+        self.extend = pacemaker_cmds.ExtendNode()
+        self.set_linstordb()
+        self.set_quorum()
+        self.set_iscsi()
+
+    def set_linstordb(self):
+        print("开始修改linstordb的配置")
+        clone_max = self.pacemaker.count_cluster_nodes()
+        self.extend.set_clone_max(clone_max)
+        if clone_max > 3:
+            hostname = self.extend.get_hostname()
+            self.extend.set_linstordb(hostname)
+        print("linstordb配置修改成功")
+
+    def set_quorum(self):
+        print("开始修改pacemaker的配置")
+        clone_max = self.pacemaker.count_cluster_nodes()
+        if clone_max >= 3:
+            self.pacemaker.modify_policy(status="ignore")
+        else:
+            self.pacemaker.modify_policy()
+
+    def set_iscsi(self):
+        result = utils.exec_cmd('crm st | grep gvip')
+        if result != "":
+            print("调整集群中的Target资源配置")
+            hostname = self.extend.get_hostname()
+            lines = result.split('\n')
+            tgns = []
+            for line in lines:
+                if 'Resource Group: gvip' in line:
+                    parts = line.split('gvip')
+                    if len(parts) > 1:
+                        number = parts[1].split(':')[0].strip()
+                        if number.isdigit():
+                            tgns.append(number)
+            for tgn in tgns:
+                self.extend.set_target(hostname, tgn)
+            print("Target配置完成")
+            result = utils.exec_cmd('crm st | grep gvip')
+            if result != "":
+                print("调整集群中的DRBD资源配置")
+                lines = result.split('\n')
+                resource_names = []
+                for line in lines:
+                    if 'Clone Set: ms_drbd_' in line and 'linstordb' not in line:
+                        parts = line.split('ms_drbd_')
+                        if len(parts) > 1:
+                            resource_name = parts[1].split(' ')[0].strip()
+                            if resource_name:
+                                resource_names.append(resource_name)
+                for resource_name in resource_names:
+                    self.extend.set_drbd(hostname, resource_name)
+                    print("DRBD资源配置完成")
+            else:
+                pass
+        else:
+            pass

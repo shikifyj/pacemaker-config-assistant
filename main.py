@@ -19,6 +19,8 @@ def main():
     delete_parser.add_argument('-t', action='store_true', help='删除Target相关资源')
     delete_parser.add_argument('-i', action='store_true', help='删除LUN')
 
+    subparsers.add_parser('extend', help='为新增节点配置')
+
     parser.add_argument('-v', action='store_true', help='Version')
     args = parser.parse_args()
 
@@ -28,6 +30,8 @@ def main():
         delete(args)
     elif args.v:
         version(args)
+    elif args.command == 'extend':
+        control.Extend()
     else:
         parser.print_help()
 
@@ -67,7 +71,7 @@ def delete(args):
 
 
 def version(args):
-    print('v1.0.1')
+    print('v1.1.0')
 
 
 if __name__ == "__main__":
