@@ -183,19 +183,26 @@ class Extend(object):
             hostname = self.extend.get_hostname()
             self.extend.set_linstordb(hostname)
         print("linstordb配置修改成功")
+        print("开始检查linstordb的状态")
+        time.sleep(2)
+        if self.extend.check_linstordb():
+            print("linstordb状态正常")
+        else:
+            print("linstordb状态异常,请手动检查配置")
 
     def set_quorum(self):
         print("开始修改pacemaker的配置")
         clone_max = self.pacemaker.count_cluster_nodes()
-        if clone_max >= 3:
+        if clone_max < 3:
             self.pacemaker.modify_policy(status="ignore")
         else:
             self.pacemaker.modify_policy()
+        print("pacemaker配置修改成功")
 
     def set_iscsi(self):
         result = utils.exec_cmd('crm st | grep gvip')
         if result != "":
-            print("调整集群中的Target资源配置")
+            print("调整集群中的Target的配置")
             hostname = self.extend.get_hostname()
             lines = result.split('\n')
             tgns = []
@@ -209,8 +216,8 @@ class Extend(object):
             for tgn in tgns:
                 self.extend.set_target(hostname, tgn)
             print("Target配置完成")
-            result = utils.exec_cmd('crm st | grep gvip')
-            if result != "":
+            result = utils.exec_cmd('crm st | grep ms_drbd_')
+            if result != "" and result.count('ms_drbd_') >= 2:
                 print("调整集群中的DRBD资源配置")
                 lines = result.split('\n')
                 resource_names = []
@@ -224,6 +231,13 @@ class Extend(object):
                 for resource_name in resource_names:
                     self.extend.set_drbd(hostname, resource_name)
                     print("DRBD资源配置完成")
+                    utils.exec_cmd(f"crm res cleanup p_drbd_{resource_name}")
+                    time.sleep(2)
+                    print("正在检查Target和DRBD资源的状态")
+                    if self.extend.check_iscsi(hostname):
+                        print("Target和DRBD资源正常")
+                    else:
+                        print("Target或DRBD资源异常,请手动检查配置")
             else:
                 pass
         else:
