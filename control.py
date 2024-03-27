@@ -171,9 +171,12 @@ class Extend(object):
     def __init__(self):
         self.pacemaker = pacemaker_cmds.Pacemaker()
         self.extend = pacemaker_cmds.ExtendNode()
-        self.set_linstordb()
-        self.set_quorum()
-        self.set_iscsi()
+        if self.extend.check_pacemaker():
+            self.set_linstordb()
+            self.set_quorum()
+            self.set_iscsi()
+        else:
+            print('Pacemaker服务异常,请手动检查')
 
     def set_linstordb(self):
         print("开始修改linstordb的配置")
