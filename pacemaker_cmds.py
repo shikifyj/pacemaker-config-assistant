@@ -422,13 +422,22 @@ class ExtendNode(object):
             return False
 
     @staticmethod
-    def check_iscsi(hostname):
-        cmd = f'crm st | grep {hostname}'
+    def check_target(tgn):
+        cmd = f'crm st | grep target{tgn}'
         result = utils.exec_cmd(cmd)
-        if 'Stopped' in result:
-            return False
-        else:
+        if 'Started' in result:
             return True
+        else:
+            return False
+
+    @staticmethod
+    def check_lun(resource_name):
+        cmd = f'crm st | grep LUN_{resource_name}'
+        result = utils.exec_cmd(cmd)
+        if 'Started' in result:
+            return True
+        else:
+            return False
 
     @staticmethod
     def check_pacemaker():

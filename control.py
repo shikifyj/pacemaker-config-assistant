@@ -174,7 +174,8 @@ class Extend(object):
         if self.extend.check_pacemaker():
             self.set_linstordb()
             self.set_quorum()
-            self.set_iscsi()
+            self.set_target()
+            self.set_drbd()
         else:
             print('Pacemaker服务异常,请手动检查')
 
@@ -202,7 +203,7 @@ class Extend(object):
             self.pacemaker.modify_policy()
         print("pacemaker配置修改成功")
 
-    def set_iscsi(self):
+    def set_target(self):
         result = utils.exec_cmd('crm st | grep gvip')
         if result != "":
             print("调整集群中的Target的配置")
@@ -218,30 +219,40 @@ class Extend(object):
                             tgns.append(number)
             for tgn in tgns:
                 self.extend.set_target(hostname, tgn)
-            print("Target配置完成")
-            result = utils.exec_cmd('crm st | grep ms_drbd_')
-            if result != "" and result.count('ms_drbd_') >= 2:
-                print("调整集群中的DRBD资源配置")
-                lines = result.split('\n')
-                resource_names = []
-                for line in lines:
-                    if 'Clone Set: ms_drbd_' in line and 'linstordb' not in line:
-                        parts = line.split('ms_drbd_')
-                        if len(parts) > 1:
-                            resource_name = parts[1].split(' ')[0].strip()
-                            if resource_name:
-                                resource_names.append(resource_name)
-                for resource_name in resource_names:
-                    self.extend.set_drbd(hostname, resource_name)
-                    print("DRBD资源配置完成")
-                    utils.exec_cmd(f"crm res cleanup p_drbd_{resource_name}")
-                    time.sleep(2)
-                    print("正在检查Target和DRBD资源的状态")
-                    if self.extend.check_iscsi(hostname):
-                        print("Target和DRBD资源正常")
+                time.sleep(1)
+                utils.exec_cmd('crm res ref')
+                time.sleep(2)
+                print("Target配置完成")
+                print("正在检测Target的状态")
+                if self.extend.check_target(tgn):
+                    print(f"Target{tgn}状态正常")
+                else:
+                    print(f"Target{tgn}状态异常,请手动检查配置")
+
+    def set_drbd(self):
+        result = utils.exec_cmd('crm st | grep ms_drbd_')
+        if result != "" and result.count('ms_drbd_') >= 2:
+            print("调整集群中的DRBD资源配置")
+            lines = result.split('\n')
+            resource_names = []
+            hostname = self.extend.get_hostname()
+            for line in lines:
+                if 'Clone Set: ms_drbd_' in line and 'linstordb' not in line:
+                    parts = line.split('ms_drbd_')
+                    if len(parts) > 1:
+                        resource_name = parts[1].split(' ')[0].strip()
+                        if resource_name:
+                            resource_names.append(resource_name)
+            for resource_name in resource_names:
+                self.extend.set_drbd(hostname, resource_name)
+                print("DRBD资源配置完成")
+                utils.exec_cmd(f"crm res cleanup p_drbd_{resource_name}")
+                time.sleep(2)
+                result = utils.exec_cmd(f"crm st | grep LUN_{resource_name}")
+                if result != "":
+                    print("正在检查LUN的状态")
+                    if self.extend.check_lun(resource_name):
+                        print(f"LUN_{resource_name}状态正常")
                     else:
-                        print("Target或DRBD资源异常,请手动检查配置")
-            else:
-                pass
-        else:
-            pass
+                        print(f"LUN_{resource_name}状态异常,请手动检查配置")
+
